@@ -2,6 +2,10 @@
 
 > Test + PoC of esbuild's metafile
 
+- 🕸️ Generate dependency graph from esbuild's metafile
+- 🔑 Generate unique id for each modules
+- ⏪ Get reverse dependencies based on a specified module
+
 ## Metafile
 
 Using generated metafile from [react-native-esbuild](https://github.com/leegeunhyeok/react-native-esbuild)'s example project.
