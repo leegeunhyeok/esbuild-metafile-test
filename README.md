@@ -4,15 +4,15 @@
 
 ## Metafile
 
-Using metafile -> [react-native-esbuild](https://github.com/leegeunhyeok/react-native-esbuild)'s example project.
+Using generated metafile from [react-native-esbuild](https://github.com/leegeunhyeok/react-native-esbuild)'s example project.
 
 ## Preview
 
 ### Dependencies
 
-```
-# src/screens/MainScreen.tsx
-{
+```js
+// src/screens/MainScreen.tsx
+const result = {
   id: 1358,
   dependencies: [
     { id: 510, path: 'node_modules/react/jsx-runtime.js' },
@@ -24,7 +24,24 @@ Using metafile -> [react-native-esbuild](https://github.com/leegeunhyeok/react-n
     },
     { id: 1043, path: 'node_modules/dripsy/src/index.ts' },
     { id: 1122, path: 'src/components/index.ts' },
-    { id: 1357, path: 'src/assets/logo.svg' }
-  ]
-}
+    { id: 1357, path: 'src/assets/logo.svg' },
+  ],
+};
+```
+
+### Inverse Dependencies
+
+```js
+// src/screens/MainScreen.tsx
+const result = {
+  id: 1358,
+  inverseDependencies: [
+    { id: 1358, path: 'src/screens/MainScreen.tsx' },
+    { id: 1361, path: 'src/screens/index.ts' },
+    { id: 1362, path: 'src/navigators/RootStack.tsx' },
+    { id: 1363, path: 'src/navigators/index.ts' },
+    { id: 1367, path: 'src/App.tsx' },
+    { id: 0, path: 'index.js' },
+  ],
+};
 ```

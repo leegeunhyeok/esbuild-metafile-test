@@ -4,13 +4,24 @@ import type { Metafile } from 'esbuild';
 
 type ModuleId = number;
 type ModuleMap = Record<number, Module>;
-type ModuleDependencyGraph = Record<ModuleId, Set<ModuleId>>;
+type ModuleVertex = {
+  dependencies: Set<ModuleId>,
+  inverseDependencies: Set<ModuleId>,
+};
+type ModuleDependencyGraph = Record<ModuleId, ModuleVertex>;
 type Module = Metafile['inputs'][string] & {
   path: string;
 }
 
 function invariant(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
+}
+
+function dependencyPathMapper(dependencies: number[], manager: DependencyManager) {
+  return dependencies.map((moduleId) => ({
+    id: moduleId,
+    path: manager.getModuleById(moduleId).path,
+  }));
 }
 
 function setToArray(_key: string, value: unknown) {
@@ -29,7 +40,7 @@ class DependencyManager {
   private initialized = false;
   private __moduleId = 1;
 
-  constructor(private metafile: Metafile, private entryPath: string) {
+  constructor(private metafile: Metafile, entryPath: string) {
     this.moduleIds[entryPath] = 0;
   }
 
@@ -37,28 +48,66 @@ class DependencyManager {
     return this.moduleIds[path] ?? (() => (this.moduleIds[path] = this.__moduleId++))();
   }
 
+  private registerVertex(module: Module): [ModuleId, ModuleVertex] {
+    const moduleId = this.generateUniqueModuleId(module);
+
+    if (!(moduleId in this.dependencyGraph)) {
+      const vertex: ModuleVertex = {
+        dependencies: new Set(),
+        inverseDependencies: new Set(),
+      };
+      this.moduleMap[moduleId] = module;
+      this.dependencyGraph[moduleId] = vertex;
+    }
+
+    return [moduleId, this.dependencyGraph[moduleId]];
+  }
+
   private traverseModules() {
     for (const modulePath in this.metafile.inputs) {
       const currentModule = this.getModule(modulePath);
-      const moduleId = this.generateUniqueModuleId(currentModule);
-      const vertex = this.dependencyGraph[moduleId] ?? new Set();
-
-      if (!(moduleId in this.moduleMap)) {
-        this.moduleMap[moduleId] = currentModule;
-        this.dependencyGraph[moduleId] = vertex;
-      }
+      const [currentModuleId, currentModuleVertex] = this.registerVertex(currentModule);
   
       for (const importModule of currentModule.imports) {
         if (!DependencyManager.TRAVERSE_ALLOWED_KINDS.some((kind) => kind === importModule.kind)) {
           continue;
         }
-  
+
         const importedModule = this.getModule(importModule.path);
         if (importedModule) {
-          vertex.add(this.generateUniqueModuleId(importedModule));
+          const [
+            importedModuleId,
+            importedModuleVertex,
+          ] = this.registerVertex(importedModule);
+
+          importedModuleVertex.inverseDependencies.add(currentModuleId);
+          currentModuleVertex.dependencies.add(importedModuleId);
         }
       }
     }
+  }
+
+  private traverseInverse(moduleId: ModuleId, inverseModuleIds = [moduleId]): ModuleId[] {
+    const { inverseDependencies } = this.dependencyGraph[moduleId];
+
+    // Reached to entry.
+    if (inverseDependencies.size === 0) {
+      return inverseModuleIds;
+    }
+
+    for (const inverseModuleId of inverseDependencies) {
+      // To avoid circular references.
+      if (inverseModuleIds.includes(inverseModuleId)) {
+        continue;
+      }
+
+      inverseModuleIds = this.traverseInverse(
+        inverseModuleId,
+        [...inverseModuleIds, inverseModuleId],
+      );
+    }
+
+    return inverseModuleIds;
   }
 
   initialize(): this {
@@ -99,6 +148,11 @@ class DependencyManager {
     invariant(this.initialized, 'not initialized');
     return this.moduleMap;
   }
+
+  getInverseDependencies(moduleId: ModuleId): ModuleId[] {
+    invariant(this.initialized, 'not initialized');
+    return this.traverseInverse(moduleId);
+  }
 }
 
 async function main() {
@@ -114,10 +168,14 @@ async function main() {
   const testModuleId = manager.getModuleId(testModulePath);
   console.log('src/screens/MainScreen.tsx', {
     id: testModuleId,
-    dependencies: Array.from(dependencyGraph[testModuleId]).map((moduleId) => ({
-      id: moduleId,
-      path: manager.getModuleById(moduleId).path,
-    })),
+    dependencies: dependencyPathMapper(
+      Array.from(dependencyGraph[testModuleId].dependencies),
+      manager,
+    ),
+    inverseDependencies: dependencyPathMapper(
+      manager.getInverseDependencies(testModuleId),
+      manager
+    ),
   });
 
   await writeFile(
