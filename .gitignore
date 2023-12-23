@@ -1,5 +1,5 @@
 node_modules/
-result/
+result/*.json
 .swc
 
 .DS_Store
