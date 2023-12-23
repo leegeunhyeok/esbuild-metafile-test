@@ -1,4 +1,5 @@
 node_modules/
+result/
 .swc
 
 .DS_Store
